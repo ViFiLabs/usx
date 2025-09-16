@@ -269,7 +269,11 @@ contract sUSX is ERC4626Upgradeable, UUPSUpgradeable, ReentrancyGuardUpgradeable
     /*=========================== Internal Functions =========================*/
 
     /// @dev Override default ERC4626 to check if deposits are frozen
-    function _deposit(address caller, address receiver, uint256 assets, uint256 shares) internal override {
+    function _deposit(address caller, address receiver, uint256 assets, uint256 shares)
+        internal
+        override
+        nonReentrant
+    {
         SUSXStorage storage $ = _getStorage();
 
         // Check if deposits are frozen
@@ -284,6 +288,7 @@ contract sUSX is ERC4626Upgradeable, UUPSUpgradeable, ReentrancyGuardUpgradeable
     function _withdraw(address caller, address receiver, address owner, uint256 assets, uint256 shares)
         internal
         override
+        nonReentrant
     {
         if (caller != owner) {
             _spendAllowance(owner, caller, shares);

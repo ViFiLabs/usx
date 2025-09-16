@@ -117,7 +117,7 @@ contract USX is ERC20Upgradeable, UUPSUpgradeable, ReentrancyGuardUpgradeable {
 
     /// @notice Deposit USDC to get USX
     /// @param _amount The amount of USDC to deposit
-    function deposit(uint256 _amount) public {
+    function deposit(uint256 _amount) public nonReentrant {
         USXStorage storage $ = _getStorage();
 
         // Check if user is whitelisted
