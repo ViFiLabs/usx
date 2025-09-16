@@ -310,23 +310,13 @@ contract sUSX is ERC4626Upgradeable, UUPSUpgradeable, ReentrancyGuardUpgradeable
     }
 
     /// @dev Override default ERC4626 to use sharePrice
-    function _convertToShares(uint256 assets, Math.Rounding /* rounding */ )
-        internal
-        view
-        override
-        returns (uint256 shares)
-    {
-        return Math.mulDiv(assets, 1e18, sharePrice(), Math.Rounding.Floor);
+    function _convertToShares(uint256 assets, Math.Rounding rounding) internal view override returns (uint256 shares) {
+        return Math.mulDiv(assets, 1e18, sharePrice(), rounding);
     }
 
     /// @dev Override default ERC4626 to use sharePrice
-    function _convertToAssets(uint256 shares, Math.Rounding /* rounding */ )
-        internal
-        view
-        override
-        returns (uint256 assets)
-    {
-        return Math.mulDiv(shares, sharePrice(), 1e18, Math.Rounding.Floor);
+    function _convertToAssets(uint256 shares, Math.Rounding rounding) internal view override returns (uint256 assets) {
+        return Math.mulDiv(shares, sharePrice(), 1e18, rounding);
     }
 
     /*=========================== UUPS Functions =========================*/
