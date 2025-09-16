@@ -22,6 +22,7 @@ contract TreasuryStorage {
     // Asset Manager errors
     error InvalidMaxLeverageFraction();
     error MaxLeverageExceeded();
+    error AssetManagerTransferMismatch(uint256 expected, uint256 actual);
 
     // Insurance Buffer errors
     error InvalidBufferRenewalRate();

@@ -95,8 +95,20 @@ contract AssetManagerAllocatorFacet is TreasuryStorage, ReentrancyGuardUpgradeab
     /// @param _amount The amount of USDC to transfer
     function transferUSDCFromAssetManager(uint256 _amount) external onlyAssetManager nonReentrant {
         TreasuryStorage.TreasuryStorageStruct storage $ = _getStorage();
+
+        // Record USDC balance before withdrawal
+        uint256 balanceBefore = $.USDC.balanceOf(address(this));
+
         $.assetManagerUSDC -= _amount;
         IAssetManager($.assetManager).withdraw(_amount);
+
+        // Sanity check: verify that the AssetManager actually transferred the expected amount
+        uint256 balanceAfter = $.USDC.balanceOf(address(this));
+        uint256 actualTransfer = balanceAfter - balanceBefore;
+        if (actualTransfer != _amount) {
+            revert AssetManagerTransferMismatch(_amount, actualTransfer);
+        }
+
         emit USDCDeallocated(_amount, $.assetManagerUSDC);
     }
 }
