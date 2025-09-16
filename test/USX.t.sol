@@ -955,6 +955,7 @@ contract USXTest is LocalDeployTestSetup {
         usx.requestUSDC(1000e18); // Request 1000 USX worth of USDC
 
         uint256 outstandingAmount = usx.totalOutstandingWithdrawalAmount();
+        assertEq(outstandingAmount, 1000e6, "Outstanding amount should be 1000 USDC");
 
         // Now deposit exactly the outstanding amount
         vm.prank(user);
@@ -962,6 +963,9 @@ contract USXTest is LocalDeployTestSetup {
 
         // Verify the deposit worked correctly
         assertEq(usx.balanceOf(user), outstandingAmount * 1e12, "User should receive correct USX amount");
+        assertEq(
+            usx.totalOutstandingWithdrawalAmount(), outstandingAmount, "Outstanding amount should remain unchanged"
+        );
     }
 
     function test_deposit_zero_usdc_for_treasury() public {
@@ -975,6 +979,7 @@ contract USXTest is LocalDeployTestSetup {
         usx.requestUSDC(1000e18); // Request 1000 USX worth of USDC
 
         uint256 outstandingAmount = usx.totalOutstandingWithdrawalAmount();
+        assertEq(outstandingAmount, 1000e6, "Outstanding amount should be 1000 USDC");
 
         // Deposit exactly the outstanding amount (all goes to contract)
         vm.prank(user);
@@ -982,6 +987,9 @@ contract USXTest is LocalDeployTestSetup {
 
         // Verify the deposit worked correctly
         assertEq(usx.balanceOf(user), outstandingAmount * 1e12, "User should receive correct USX amount");
+        assertEq(
+            usx.totalOutstandingWithdrawalAmount(), outstandingAmount, "Outstanding amount should remain unchanged"
+        );
     }
 
     function test_deposit_zero_usdc_for_contract() public {
@@ -995,6 +1003,250 @@ contract USXTest is LocalDeployTestSetup {
 
         // Verify the deposit worked correctly
         assertEq(usx.balanceOf(user), depositAmount * 1e12, "User should receive correct USX amount");
+    }
+
+    function test_deposit_fix_multiple_deposits_after_withdrawal_request() public {
+        // Test the fix for the issue where multiple deposits would all go to contract
+        // instead of only the first deposit going to contract and subsequent going to treasury
+
+        // User A requests 100 USDC
+        vm.prank(user);
+        usx.deposit(1000e6); // Deposit 1000 USDC to get USX
+
+        vm.prank(user);
+        usx.requestUSDC(100e18); // Request 100 USX worth of USDC
+
+        uint256 outstandingAmount = usx.totalOutstandingWithdrawalAmount();
+        assertEq(outstandingAmount, 100e6, "Outstanding amount should be 100 USDC");
+
+        // User B deposits 100 USDC - should all go to contract
+        address userB = address(0x1234);
+        vm.prank(admin);
+        usx.whitelistUser(userB, true);
+        deal(address(usdc), userB, 1000e6);
+        vm.prank(userB);
+        usdc.approve(address(usx), type(uint256).max);
+
+        vm.prank(userB);
+        usx.deposit(100e6);
+
+        // Verify outstanding amount is still 100 (not reduced by deposits)
+        assertEq(usx.totalOutstandingWithdrawalAmount(), 100e6, "Outstanding amount should remain 100 USDC");
+
+        // User C deposits 100 USDC - should all go to treasury (not contract)
+        address userC = address(0x5678);
+        vm.prank(admin);
+        usx.whitelistUser(userC, true);
+        deal(address(usdc), userC, 1000e6);
+        vm.prank(userC);
+        usdc.approve(address(usx), type(uint256).max);
+
+        uint256 treasuryBalanceBefore = usdc.balanceOf(address(treasury));
+
+        vm.prank(userC);
+        usx.deposit(100e6);
+
+        uint256 treasuryBalanceAfter = usdc.balanceOf(address(treasury));
+
+        // Verify that User C's deposit went to treasury, not contract
+        assertEq(treasuryBalanceAfter - treasuryBalanceBefore, 100e6, "User C's deposit should go to treasury");
+        assertEq(usx.totalOutstandingWithdrawalAmount(), 100e6, "Outstanding amount should remain 100 USDC");
+    }
+
+    function test_deposit_edge_case_contract_already_has_usdc() public {
+        // Test deposit when contract already has some USDC from previous deposits
+        // User A requests 100 USDC
+        vm.prank(user);
+        usx.deposit(1000e6);
+        vm.prank(user);
+        usx.requestUSDC(100e18);
+
+        // User B deposits 50 USDC (partial fulfillment)
+        address userB = address(0x1234);
+        vm.prank(admin);
+        usx.whitelistUser(userB, true);
+        deal(address(usdc), userB, 1000e6);
+        vm.prank(userB);
+        usdc.approve(address(usx), type(uint256).max);
+
+        vm.prank(userB);
+        usx.deposit(50e6);
+
+        // Contract now has 50 USDC, but still needs 50 more
+        assertEq(usdc.balanceOf(address(usx)), 50e6, "Contract should have 50 USDC");
+        assertEq(usx.totalOutstandingWithdrawalAmount(), 100e6, "Outstanding should still be 100 USDC");
+
+        // User C deposits 100 USDC - should only send 50 to contract, 50 to treasury
+        address userC = address(0x5678);
+        vm.prank(admin);
+        usx.whitelistUser(userC, true);
+        deal(address(usdc), userC, 1000e6);
+        vm.prank(userC);
+        usdc.approve(address(usx), type(uint256).max);
+
+        uint256 treasuryBalanceBefore = usdc.balanceOf(address(treasury));
+
+        vm.prank(userC);
+        usx.deposit(100e6);
+
+        uint256 treasuryBalanceAfter = usdc.balanceOf(address(treasury));
+        uint256 contractBalanceAfter = usdc.balanceOf(address(usx));
+
+        // Verify correct distribution
+        assertEq(contractBalanceAfter, 100e6, "Contract should have 100 USDC total");
+        assertEq(treasuryBalanceAfter - treasuryBalanceBefore, 50e6, "50 USDC should go to treasury");
+        assertEq(usx.totalOutstandingWithdrawalAmount(), 100e6, "Outstanding should remain 100 USDC");
+    }
+
+    function test_deposit_edge_case_multiple_users_complex_scenario() public {
+        // Test complex scenario with multiple users and partial fulfillments
+        // User A requests 100 USDC
+        vm.prank(user);
+        usx.deposit(1000e6);
+        vm.prank(user);
+        usx.requestUSDC(100e18);
+
+        // User B deposits 1000e6 USDC first
+        address userB = address(0x1234);
+        vm.prank(admin);
+        usx.whitelistUser(userB, true);
+        deal(address(usdc), userB, 1000e6);
+        vm.prank(userB);
+        usdc.approve(address(usx), type(uint256).max);
+
+        vm.prank(userB);
+        usx.deposit(1000e6);
+
+        // User B requests 200 USDC (200e18 USX worth) - this will be fulfilled immediately
+        // because contract has 100e6 USDC from User A's request, and User B's deposit
+        vm.prank(userB);
+        usx.requestUSDC(200e18);
+
+        // User C deposits 1000e6 USDC
+        address userC = address(0x5678);
+        vm.prank(admin);
+        usx.whitelistUser(userC, true);
+        deal(address(usdc), userC, 1000e6);
+        vm.prank(userC);
+        usdc.approve(address(usx), type(uint256).max);
+
+        vm.prank(userC);
+        usx.deposit(1000e6);
+
+        // User C requests 50 USDC (50e18 USX worth) - this will be fulfilled immediately
+        vm.prank(userC);
+        usx.requestUSDC(50e18);
+
+        // Total outstanding: 300 USDC (100e6 from User A + 200e6 from User B)
+        uint256 totalOutstanding = usx.totalOutstandingWithdrawalAmount();
+        assertEq(totalOutstanding, 300e6, "Total outstanding should be 300 USDC");
+
+        // User D deposits 150 USDC (partial fulfillment)
+        address userD = address(0x9ABC);
+        vm.prank(admin);
+        usx.whitelistUser(userD, true);
+        deal(address(usdc), userD, 1000e6);
+        vm.prank(userD);
+        usdc.approve(address(usx), type(uint256).max);
+
+        uint256 treasuryBalanceBefore = usdc.balanceOf(address(treasury));
+
+        vm.prank(userD);
+        usx.deposit(150e6);
+
+        uint256 treasuryBalanceAfter = usdc.balanceOf(address(treasury));
+        uint256 contractBalanceAfter = usdc.balanceOf(address(usx));
+
+        // Verify correct distribution
+        assertEq(contractBalanceAfter, 300e6, "Contract should have 300 USDC");
+        assertEq(treasuryBalanceAfter - treasuryBalanceBefore, 100e6, "100 USDC should go to treasury");
+        assertEq(usx.totalOutstandingWithdrawalAmount(), 300e6, "Outstanding should remain 300 USDC");
+
+        // User E deposits 100 USDC (more partial fulfillment)
+        address userE = address(0xDEF0);
+        vm.prank(admin);
+        usx.whitelistUser(userE, true);
+        deal(address(usdc), userE, 1000e6);
+        vm.prank(userE);
+        usdc.approve(address(usx), type(uint256).max);
+
+        uint256 treasuryBalanceBeforeE = usdc.balanceOf(address(treasury));
+
+        vm.prank(userE);
+        usx.deposit(100e6);
+
+        uint256 treasuryBalanceAfterE = usdc.balanceOf(address(treasury));
+        uint256 contractBalanceAfterE = usdc.balanceOf(address(usx));
+
+        // Verify correct distribution
+        assertEq(contractBalanceAfterE, 300e6, "Contract should have 300 USDC total");
+        assertEq(treasuryBalanceAfterE - treasuryBalanceBeforeE, 100e6, "100 USDC should go to treasury");
+        assertEq(usx.totalOutstandingWithdrawalAmount(), 300e6, "Outstanding should remain 300 USDC");
+    }
+
+    function test_deposit_edge_case_state_consistency() public {
+        // Test that deposit doesn't break state consistency between global and individual tracking
+        // User A requests 100 USDC
+        vm.prank(user);
+        usx.deposit(1000e6);
+        vm.prank(user);
+        usx.requestUSDC(100e18);
+
+        // User B deposits 1000e6 USDC first
+        address userB = address(0x1234);
+        vm.prank(admin);
+        usx.whitelistUser(userB, true);
+        deal(address(usdc), userB, 1000e6);
+        vm.prank(userB);
+        usdc.approve(address(usx), type(uint256).max);
+
+        vm.prank(userB);
+        usx.deposit(1000e6);
+
+        // Now User B requests 50 USDC (50e18 USX worth) - this will be fulfilled immediately
+        // because contract has 100e6 USDC from the deposit
+        vm.prank(userB);
+        usx.requestUSDC(50e18);
+
+        // Check state consistency before deposit
+        uint256 globalOutstanding = usx.totalOutstandingWithdrawalAmount();
+        uint256 userAOutstanding = usx.outstandingWithdrawalRequests(user);
+        uint256 userBOutstanding = usx.outstandingWithdrawalRequests(userB);
+
+        // User A still has 100e6 outstanding, User B has 0 because it was fulfilled immediately
+        assertEq(globalOutstanding, 100e6, "Global outstanding should be 100 USDC");
+        assertEq(userAOutstanding, 100e6, "User A should have 100 USDC outstanding");
+        assertEq(userBOutstanding, 0, "User B should have 0 USDC outstanding (fulfilled immediately)");
+        assertEq(globalOutstanding, userAOutstanding + userBOutstanding, "Global should equal sum of individual");
+
+        // User C deposits 100 USDC
+        address userC = address(0x5678);
+        vm.prank(admin);
+        usx.whitelistUser(userC, true);
+        deal(address(usdc), userC, 1000e6);
+        vm.prank(userC);
+        usdc.approve(address(usx), type(uint256).max);
+
+        vm.prank(userC);
+        usx.deposit(100e6);
+
+        // Check state consistency after deposit
+        uint256 globalOutstandingAfter = usx.totalOutstandingWithdrawalAmount();
+        uint256 userAOutstandingAfter = usx.outstandingWithdrawalRequests(user);
+        uint256 userBOutstandingAfter = usx.outstandingWithdrawalRequests(userB);
+
+        // State should remain consistent
+        assertEq(globalOutstandingAfter, 100e6, "Global outstanding should remain 100 USDC");
+        assertEq(userAOutstandingAfter, 100e6, "User A outstanding should remain 100 USDC");
+        assertEq(userBOutstandingAfter, 0, "User B outstanding should remain 0 USDC");
+        assertEq(
+            globalOutstandingAfter,
+            userAOutstandingAfter + userBOutstandingAfter,
+            "Global should still equal sum of individual"
+        );
+
+        // Contract should have 100 USDC (50e6 from User B's fulfilled request + 50e6 from User C's deposit)
+        assertEq(usdc.balanceOf(address(usx)), 100e6, "Contract should have 100 USDC total");
     }
 
     function test_authorizeUpgrade_success() public {

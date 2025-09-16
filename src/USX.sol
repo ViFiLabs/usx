@@ -127,8 +127,12 @@ contract USX is ERC20Upgradeable, UUPSUpgradeable, ReentrancyGuardUpgradeable {
         if ($.frozen) revert Frozen();
 
         // Calculate USDC distribution: keep what's needed for withdrawal requests, send excess to treasury
-        uint256 usdcForContract =
-            _amount <= $.totalOutstandingWithdrawalAmount ? _amount : $.totalOutstandingWithdrawalAmount;
+        uint256 contractUSDCBalance = $.USDC.balanceOf(address(this));
+        uint256 usdcNeeded = $.totalOutstandingWithdrawalAmount > contractUSDCBalance
+            ? $.totalOutstandingWithdrawalAmount - contractUSDCBalance
+            : 0;
+
+        uint256 usdcForContract = _amount <= usdcNeeded ? _amount : usdcNeeded;
         uint256 usdcForTreasury = _amount - usdcForContract;
 
         // Transfer USDC to contract (if needed for withdrawal requests)
