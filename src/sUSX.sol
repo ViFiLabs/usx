@@ -297,13 +297,13 @@ contract sUSX is ERC4626Upgradeable, UUPSUpgradeable, ReentrancyGuardUpgradeable
         // Record withdrawal request
         SUSXStorage storage $ = _getStorage();
         $.withdrawalRequests[$.withdrawalIdCounter] =
-            WithdrawalRequest({user: receiver, amount: shares, withdrawalBlock: block.number, claimed: false});
+            WithdrawalRequest({user: owner, amount: shares, withdrawalBlock: block.number, claimed: false});
 
         // Emit standard ERC4626 Withdraw event for consistency
         emit Withdraw(caller, receiver, owner, assets, shares);
 
         // Emit additional withdrawal request event for sUSX-specific functionality
-        emit WithdrawalRequested(receiver, shares, $.withdrawalIdCounter);
+        emit WithdrawalRequested(owner, shares, $.withdrawalIdCounter);
 
         // Increment withdrawalIdCounter
         $.withdrawalIdCounter++;

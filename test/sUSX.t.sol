@@ -674,10 +674,10 @@ contract sUSXTest is LocalDeployTestSetup {
         vm.prank(user);
         susx.withdraw(shares / 2, receiver, user);
 
-        // Check that withdrawal request was created for the receiver
+        // Check that withdrawal request was created for the owner
         uint256 requestId = susx.withdrawalIdCounter() - 1;
         sUSX.WithdrawalRequest memory request = susx.withdrawalRequests(requestId);
-        assertEq(request.user, receiver, "Withdrawal request should be for receiver");
+        assertEq(request.user, user, "Withdrawal request should be for owner");
     }
 
     function test_convertToShares_with_rounding() public {
