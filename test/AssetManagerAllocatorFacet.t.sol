@@ -10,10 +10,6 @@ contract AssetManagerAllocatorFacetTest is LocalDeployTestSetup {
 
         // Give treasury some USDC to work with
         deal(address(usdc), address(treasury), 10000e6); // 10,000 USDC
-
-        // Give asset manager USDC approval to receive transfers from treasury
-        vm.prank(address(treasury));
-        usdc.approve(address(mockAssetManager), type(uint256).max);
     }
 
     /*=========================== CORE FUNCTIONALITY TESTS =========================*/

@@ -189,11 +189,6 @@ contract LocalDeployTestSetup is Test {
         vm.prank(user);
         usdc.approve(address(usx), type(uint256).max);
 
-        // Approve MockAssetManager to spend USDC from treasury
-        vm.prank(address(treasury));
-        usdc.approve(address(mockAssetManager), type(uint256).max);
-        console.log("  USDC approvals set");
-
         // Whitelist test user
         console.log("  Whitelisting test user...");
         vm.prank(admin);

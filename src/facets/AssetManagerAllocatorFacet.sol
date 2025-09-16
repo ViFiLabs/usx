@@ -83,6 +83,9 @@ contract AssetManagerAllocatorFacet is TreasuryStorage, ReentrancyGuardUpgradeab
         // Check if the transfer would exceed the max leverage
         if (!checkMaxLeverage(_amount)) revert MaxLeverageExceeded();
 
+        // Approve the Asset Manager to spend USDC from the Treasury
+        $.USDC.approve($.assetManager, _amount);
+
         $.assetManagerUSDC += _amount;
         IAssetManager($.assetManager).deposit(_amount);
         emit USDCAllocated(_amount, $.assetManagerUSDC);
