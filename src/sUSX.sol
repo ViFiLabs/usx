@@ -151,7 +151,7 @@ contract sUSX is ERC4626Upgradeable, UUPSUpgradeable, ReentrancyGuardUpgradeable
         uint256 USXAmount = _convertToAssets($.withdrawalRequests[withdrawalId].amount, Math.Rounding.Floor);
 
         // Burn sUSX shares
-        _burn(msg.sender, $.withdrawalRequests[withdrawalId].amount);
+        _burn(address(this), $.withdrawalRequests[withdrawalId].amount);
 
         // Distribute portion of USX to the Governance Warchest
         uint256 governanceWarchestPortion = withdrawalFee(USXAmount);
@@ -285,6 +285,7 @@ contract sUSX is ERC4626Upgradeable, UUPSUpgradeable, ReentrancyGuardUpgradeable
 
     /// @dev User must wait for withdrawalPeriod to pass before unstaking (withdrawalPeriod)
     /// @dev Override default ERC4626 for the 2 step withdrawal process in protocol
+    /// @dev sUSX transferred in this call, then burned upon the claimWithdraw call
     function _withdraw(address caller, address receiver, address owner, uint256 assets, uint256 shares)
         internal
         override
@@ -293,6 +294,9 @@ contract sUSX is ERC4626Upgradeable, UUPSUpgradeable, ReentrancyGuardUpgradeable
         if (caller != owner) {
             _spendAllowance(owner, caller, shares);
         }
+
+        // Transfer sUSX to the contract
+        transfer(address(this), shares);
 
         // Record withdrawal request
         SUSXStorage storage $ = _getStorage();
