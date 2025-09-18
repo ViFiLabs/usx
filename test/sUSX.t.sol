@@ -429,7 +429,7 @@ contract sUSXTest is LocalDeployTestSetup {
 
         // Try to claim immediately (before withdrawal period)
         vm.prank(user);
-        vm.expectRevert(sUSX.WithdrawalPeriodNotPassed.selector);
+        vm.expectRevert(sUSX.WithdrawalNotClaimable.selector);
         susx.claimWithdraw(0);
     }
 
@@ -463,7 +463,7 @@ contract sUSXTest is LocalDeployTestSetup {
 
         // Try to claim (withdrawal period passed but no NEW epoch after withdrawal)
         vm.prank(user);
-        vm.expectRevert(sUSX.NextEpochNotStarted.selector);
+        vm.expectRevert(sUSX.WithdrawalNotClaimable.selector);
         susx.claimWithdraw(0);
     }
 

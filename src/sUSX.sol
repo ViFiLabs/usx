@@ -19,8 +19,7 @@ contract sUSX is ERC4626Upgradeable, UUPSUpgradeable, ReentrancyGuardUpgradeable
     error NotGovernance();
     error NotTreasury();
     error WithdrawalAlreadyClaimed();
-    error WithdrawalPeriodNotPassed();
-    error NextEpochNotStarted();
+    error WithdrawalNotClaimable();
     error InvalidMinWithdrawalPeriod();
     error InvalidWithdrawalFeeFraction();
     error TreasuryAlreadySet();
@@ -139,13 +138,11 @@ contract sUSX is ERC4626Upgradeable, UUPSUpgradeable, ReentrancyGuardUpgradeable
         // Check if the withdrawal request is unclaimed
         if ($.withdrawalRequests[withdrawalId].claimed) revert WithdrawalAlreadyClaimed();
 
-        // Check if the withdrawal period has passed
-        if ($.withdrawalRequests[withdrawalId].withdrawalBlock + $.withdrawalPeriod > block.number) {
-            revert WithdrawalPeriodNotPassed();
-        }
-
-        // Check if the next epoch has started since the withdrawal request was made
-        if ($.withdrawalRequests[withdrawalId].withdrawalBlock > $.lastEpochBlock) revert NextEpochNotStarted();
+        // Check if the next epoch has started since the withdrawal request was made or if the withdrawal period has passed
+        if (
+            $.withdrawalRequests[withdrawalId].withdrawalBlock > $.lastEpochBlock
+                || $.withdrawalRequests[withdrawalId].withdrawalBlock + $.withdrawalPeriod > block.number
+        ) revert WithdrawalNotClaimable();
 
         // Get the total USX amount for the amount of sUSX being redeemed
         uint256 USXAmount = _convertToAssets($.withdrawalRequests[withdrawalId].amount, Math.Rounding.Floor);
